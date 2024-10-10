@@ -54,10 +54,7 @@ const loginUser = async (req, res) => {
     }
 
     const user = results[0];
-
-    if (!password) {
-      return res.status(400).send("Password is required");
-    }
+    const isAdmin = user.username === "admin";
 
     try {
       const isMatch = await bcrypt.compare(password, user.password_hash);
@@ -65,8 +62,33 @@ const loginUser = async (req, res) => {
         return res.status(401).send("Invalid email or password");
       }
 
-      const token = generateToken(user);
-      res.json({ token, username: user.username, email: user.email });
+      let lookerQuery =
+        "SELECT looker_link FROM looker_links WHERE username = ?";
+      if (isAdmin) {
+        // Get both links for admin
+        lookerQuery =
+          "SELECT looker_link, additional_looker_link FROM looker_links WHERE username = 'admin'";
+      }
+
+      db.query(lookerQuery, [user.username], (lookerErr, lookerResults) => {
+        if (lookerErr || lookerResults.length === 0) {
+          return res.status(500).send("Error fetching Looker link");
+        }
+
+        const lookerLink = lookerResults[0].looker_link;
+        const additionalLookerLink = isAdmin
+          ? lookerResults[0].additional_looker_link
+          : null;
+        const token = generateToken(user);
+
+        res.json({
+          token,
+          username: user.username,
+          email: user.email,
+          lookerLink,
+          additionalLookerLink, // Send additional link if admin
+        });
+      });
     } catch (compareError) {
       console.error("Bcrypt comparison error:", compareError);
       return res
@@ -74,17 +96,6 @@ const loginUser = async (req, res) => {
         .send("Internal server error during password comparison");
     }
   });
-};
-const generateGauthUrl = async (req, res) => {
-  const authUrl = client.generateAuthUrl({
-    access_type: "offline",
-    scope: [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-    ],
-  });
-  console.log(authUrl);
-  return res.redirect(authUrl);
 };
 
 // Google OAuth Login
@@ -112,7 +123,7 @@ const googleOAuthLogin = async (req, res) => {
     db.query(query, [sub], async (err, results) => {
       if (err) {
         console.error("Database error:", err);
-        return res.status(500).send("Database error");
+        return res.status(500).send(err);
       }
 
       let user;
