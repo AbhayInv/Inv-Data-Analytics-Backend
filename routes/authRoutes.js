@@ -34,4 +34,8 @@ router.get("/user-link/:username", (req, res) => {
   });
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', uptime: process.uptime(), timestamp: new Date() });
+});
+
 module.exports = router;
