@@ -6,7 +6,7 @@ const db = require("./config/db");
 require("dotenv").config();
 
 const app = express();
-const port = 5003;
+const port = 8000;
 if (process.env.NODE_ENV === "production") {
   console.log = function () {};
 }
